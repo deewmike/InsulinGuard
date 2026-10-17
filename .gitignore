@@ -1,0 +1,54 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IDE files
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# Flutter/Dart/Pub generated files
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Android build and native caches
+**/.gradle/
+**/.cxx/
+**/.externalNativeBuild/
+/android/app/debug/
+/android/app/profile/
+/android/app/release/
+
+# iOS generated settings
+/ios/Flutter/Generated.xcconfig
+/ios/Flutter/flutter_export_environment.sh
+
+# Local credentials, signing artifacts and secrets
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+*.p12
+*.mobileprovision
+
+# Flutter symbolication / obfuscation outputs
+app.*.symbols
+app.*.map.json
