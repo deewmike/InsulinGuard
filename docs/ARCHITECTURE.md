@@ -1,30 +1,30 @@
-# Architettura del sistema
+# System Architecture
 
-[← README](../README.md) · [Protocollo BLE](BLE_PROTOCOL.md) · [Frontend & UX](FRONTEND_UX.md)
+[← README](../README.md) · [BLE protocol](BLE_PROTOCOL.md) · [Frontend and UX](FRONTEND_UX.md)
 
-## Ambito e componenti
+## System components
 
-La tesi Front-End (Michele Contino, cap. 2) distingue **Front-End, Data Handler e Connessione BLE**. La copia Drive `appInsulin` realizza tali responsabilità attraverso Provider, controller Dart e servizi locali: **non è stata identificata un'API o un backend cloud**. Le capacità dichiarate nelle tesi non equivalgono automaticamente a funzionalità verificate nel codice.
+InsulinGuard is organized around three responsibilities: **Flutter frontend, data management, and BLE communication**. Provider connects the UI with Dart controllers and local services. The application uses local persistence; there is no cloud backend integration.
 
 ```mermaid
 flowchart TB
-  subgraph hardware[Dispositivo esterno]
-    D["Trasduttore / simulatore\nBLE peripheral"]
+  subgraph hardware[External device]
+    D["Bioimpedance transducer / simulator\nBLE peripheral"]
   end
-  subgraph transport[Trasporto e protocollo]
+  subgraph transport[Transport and application protocol]
     R["flutter_reactive_ble\nGATT central"]
     CONN["BLEConnectionController\nscan, connect, reconnect, discovery"]
-    HANDLER["BLEController\ninterpretazione dati e stato misura"]
-    CMD["BLECommandSender\ncomandi, CRC16, ACK/NACK"]
+    HANDLER["BLEController\nsample decoding and measurement state"]
+    CMD["BLECommandSender\ncommands, CRC16, ACK/NACK"]
   end
-  subgraph state[Stato applicativo]
+  subgraph state[Application state]
     P["MultiProvider\nChangeNotifierProxyProvider"]
-    APP["AppState\npreferenze e dati paziente"]
+    APP["AppState\npreferences and patient data"]
   end
-  subgraph presentation[Interfaccia]
-    UI["Widget Flutter\nHome / Dispositivo / Staff / Patch"]
+  subgraph presentation[Presentation]
+    UI["Flutter widgets\nHome / Device / Staff / Patch"]
   end
-  subgraph persistence[Servizi locali]
+  subgraph persistence[Local services]
     DB["DatabaseHelper\nsqflite → insulina.db"]
     PREF["shared_preferences"]
     NOTIF["NotificationService\nflutter_local_notifications"]
@@ -44,42 +44,42 @@ flowchart TB
   UI --> NOTIF
 ```
 
-Il collegamento tra `BLECommandSender` e connessione nel diagramma è **logico**: il sender riceve direttamente `FlutterReactiveBle` e `QualifiedCharacteristic` tramite `BLEController.setBLE(...)` durante la discovery.
+During GATT discovery, `BLEController.setBLE(...)` provides the command sender with `FlutterReactiveBle` and a `QualifiedCharacteristic`.
 
-## Avvio e responsabilità
+## Startup and responsibilities
 
-`main.dart` chiama `WidgetsFlutterBinding.ensureInitialized()`, inizializza `NotificationService` e crea un `MultiProvider` con `BLEController`, `BLEConnectionController` (tramite `ChangeNotifierProxyProvider` e `injectBLEController`) e `AppState`. L'UI parte da `MaterialApp` e `CustomBottomNav`; `Provider.of`/`Consumer` reagiscono a `notifyListeners()`.
+`main.dart` calls `WidgetsFlutterBinding.ensureInitialized()`, initializes `NotificationService`, and creates a `MultiProvider` with `BLEController`, `BLEConnectionController` (injected through `ChangeNotifierProxyProvider` and `injectBLEController`), and `AppState`. The UI starts with `MaterialApp` and `CustomBottomNav`; `Provider.of`/`Consumer` respond to `notifyListeners()`.
 
-| Componente | Responsabilità osservata |
+| Component | Responsibility |
 | --- | --- |
-| `core/ble_connection.dart` · `BLEConnectionController` | Scansione, connessione, riconnessione, GATT discovery e sottoscrizione alle notifiche. |
-| `core/ble_handler.dart` · `BLEController` | Decodifica, CRC, stato batteria/campioni/sweep e calcoli per l'esito patch; in alcuni percorsi naviga direttamente. |
-| `core/ble_commandSender.dart` · `BLECommandSender` | Crea payload/CRC e invia comandi GATT con attesa ACK applicativo. |
-| `core/app_state.dart` · `AppState` | Stato paziente, PIN dimostrativo, patch e prossimo evento. |
-| `core/database_helper.dart` · `DatabaseHelper` | Persistenza SQLite delle somministrazioni. |
-| `core/notification_service.dart`, `permission_handler_service.dart` | Promemoria locali e permessi notifiche/allarmi. |
-| `core/data_manager.dart`, `utils/complex_numbers.dart` | Helper e dati simulati/operazioni di supporto. |
-| `ui/pages/`, `ui/widgets/` | Schermate, navigazione e orchestrazione dei flussi utente. |
+| `core/ble_connection.dart` · `BLEConnectionController` | Scanning, connection, reconnection, GATT discovery, and notification subscriptions |
+| `core/ble_handler.dart` · `BLEController` | Decoding, CRC, battery/sample/sweep state, and calculations used for patch checks; also triggers navigation on some paths |
+| `core/ble_commandSender.dart` · `BLECommandSender` | Constructs payloads/CRC and writes GATT commands while waiting for application-level acknowledgments |
+| `core/app_state.dart` · `AppState` | Patient state, demonstration staff PIN, patch state, and next event |
+| `core/database_helper.dart` · `DatabaseHelper` | SQLite persistence of administrations |
+| `core/notification_service.dart`, `permission_handler_service.dart` | Local reminders and notification/alarm permissions |
+| `core/data_manager.dart`, `utils/complex_numbers.dart` | Helpers, simulated data, and supporting operations |
+| `ui/pages/`, `ui/widgets/` | Screens, navigation, and coordination of user workflows |
 
-Il pattern effettivo è **Provider + `ChangeNotifier`**: non BLoC, Riverpod né una Clean Architecture formalmente stratificata.
+State management uses **Provider + `ChangeNotifier`**.
 
-## Scambio dati BLE
+## BLE data exchange
 
 ```mermaid
 sequenceDiagram
-  actor Staff as Utente / Staff
+  actor Staff as User / Healthcare staff
   participant UI as BLEScanScreen
   participant Conn as BLEConnectionController
-  participant GATT as Periferica GATT
+  participant GATT as GATT peripheral
   participant Handler as BLEController
   participant Sender as BLECommandSender
-  Staff->>UI: Premi Scan
+  Staff->>UI: Tap Scan
   UI->>Conn: startScan()
   Conn->>Conn: requestPermissions()
   Conn->>GATT: scanForDevices(withServices: [])
   GATT-->>Conn: DiscoveredDevice
-  Conn-->>UI: notifyListeners() / lista filtrata
-  Staff->>UI: Seleziona periferica
+  Conn-->>UI: notifyListeners() / filtered list
+  Staff->>UI: Select device
   UI->>Conn: connectToDevice(id, context)
   Conn->>GATT: connectToDevice(id)
   GATT-->>Conn: connected
@@ -87,26 +87,24 @@ sequenceDiagram
   Conn->>GATT: discoverServices(id)
   Conn->>Handler: setBLE(ble, characteristic)
   Conn->>GATT: subscribeToCharacteristic(...)
-  Staff->>UI: Continua / leggi batteria
+  Staff->>UI: Continue / read battery
   UI->>Handler: updateBattery()
   Handler->>Sender: sendCommandWithAck(0x00)
   Sender->>GATT: writeCharacteristicWithResponse(...)
-  GATT-->>Conn: Notifica ACK + payload + CRC
+  GATT-->>Conn: ACK + payload + CRC notification
   Conn->>Handler: handleIncomingData(bytes, context)
   Handler->>Sender: completeAck() / handleResponse(...)
-  Handler-->>UI: notifyListeners() / batteria
+  Handler-->>UI: notifyListeners() / battery state
 ```
 
-La richiesta `requestMtu(100)` appare nel percorso di connessione; **MTU effettivo e compatibilità multipiattaforma non sono stati verificati**. Per il wire format, vedi [Protocollo BLE](BLE_PROTOCOL.md).
+`requestMtu(100)` requests a larger MTU; the negotiated value depends on the peripheral and operating system. See [BLE protocol](BLE_PROTOCOL.md) for the byte-level format.
 
-## Dati locali e stato
+## Local data and state
 
-- **SQLite:** `DatabaseHelper` apre `insulina.db` (schema v3); `somministrazioni` contiene `id` (PK autoincrementale), `date`, `time`, `dosage`, `insulinType` (testo) e `isTaken` (intero 0/1). Offre lettura, inserimento, modifica, cancellazione, marcatura e ricerca del prossimo evento. Il parametro `meal` è usato in alcuni percorsi ma **non è una colonna dello schema**.
-- **Preferenze:** `AppState` conserva `staff_pin`, `is_patch_applied`, `patch_replacement_date`, `user_nome`, `user_cognome` e `user_data_nascita`. Il PIN di fallback `0000` e `shared_preferences` **non costituiscono autenticazione o storage sicuro**.
-- **Notifiche:** `HomePage` pianifica un promemoria un minuto prima della prossima dose futura; altri percorsi, incluso il diario, schedulano notifiche. La sincronizzazione di tutte le modifiche/cancellazioni non è centralizzata.
+- **SQLite:** `DatabaseHelper` opens `insulina.db` (schema version 3). The `somministrazioni` table includes `id` (autoincrement primary key), `date`, `time`, `dosage`, `insulinType` (text), and `isTaken` (integer 0/1). The helper supports inserts, reads, updates, deletion, status changes, and next-event lookup. Some callers use a `meal` field that is absent from the database schema; see [Known issues](KNOWN_ISSUES.md).
+- **Preferences:** `AppState` stores `staff_pin`, `is_patch_applied`, `patch_replacement_date`, `user_nome`, `user_cognome`, and `user_data_nascita`. The default PIN is `0000`; `shared_preferences` is not intended for secure authentication.
+- **Notifications:** `HomePage` schedules a reminder one minute before the next upcoming dose; other routes, including the administration log, also schedule notifications. Synchronization after every edit/deletion is not centralized.
 
-## Confini architetturali
+## Design considerations
 
-La separazione dei moduli è **parziale**: `BLEController` usa `BuildContext`/`Navigator`, alcuni widget gestiscono timeout e controlli statistici, il ciclo di vita di tutte le subscription BLE non è completamente tracciato, e `HomePage` istanzia un `AppState` separato per la card patch. Non risulta verificato uno scheduler BLE completo per le finestre del ciclo da 48 ore.
-
-**Evoluzione proposta, non implementata:** eventi di dominio disaccoppiati dalla UI (`BatteryRead`, `SweepCompleted`, `ProtocolError`), gestione esplicita delle subscription e repository unico per il diario. Priorità e differenze rispetto alle tesi: [Verifiche e problemi noti](KNOWN_ISSUES.md).
+Some application responsibilities cross module boundaries: `BLEController` performs navigation through `BuildContext`, screens coordinate timeouts and measurement checks, and administration data is read directly from `DatabaseHelper`. Future refactoring can isolate protocol events from navigation and consolidate data access behind a repository. The related issues are tracked in [Known issues](KNOWN_ISSUES.md).

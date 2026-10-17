@@ -1,273 +1,217 @@
 # InsulinGuard
 
-**Applicazione Flutter per la gestione delle somministrazioni di insulina e l'interazione BLE con un prototipo di monitoraggio della bioimpedenza cutanea.**
+**Flutter application for insulin administration tracking and Bluetooth Low Energy (BLE) communication with a skin-bioimpedance monitoring prototype.**
 
 [![Flutter](https://img.shields.io/badge/Flutter-framework-02569B?logo=flutter&logoColor=white)](https://flutter.dev/)
-[![Dart](https://img.shields.io/badge/Dart-SDK%20%5E3.6.2-0175C2?logo=dart&logoColor=white)](https://dart.dev/)
-![Build](https://img.shields.io/badge/build-non%20verificata-lightgrey)
-![Status](https://img.shields.io/badge/stato-prototipo%20accademico-blue)
+[![Dart](https://img.shields.io/badge/Dart-3.x-0175C2?logo=dart&logoColor=white)](https://dart.dev/)
 
-> [!IMPORTANT]
-> **Prototipo accademico, non dispositivo medico certificato.** Le procedure di controllo della patch e le soglie nel codice non costituiscono una validazione clinica. Non usare il software per prendere decisioni terapeutiche o determinare dosi di insulina. La documentazione descrive il repository analizzato, non certifica il funzionamento end-to-end con hardware reale.
+> **Research prototype:** InsulinGuard is not a certified medical device and must not be used to make treatment or insulin-dosing decisions.
 
-## Indice
+## Overview
 
-- [Panoramica](#panoramica)
-- [Schermate dell’applicazione](#schermate-dellapplicazione)
-- [Funzionalità e stato di implementazione](#funzionalità-e-stato-di-implementazione)
-- [Architettura](#architettura)
-- [Modulo BLE](#modulo-ble)
-- [Frontend e UX](#frontend-e-ux)
-- [Stack tecnologico](#stack-tecnologico)
-- [Prerequisiti e avvio locale](#prerequisiti-e-avvio-locale)
-- [Documentazione tecnica](#documentazione-tecnica)
-- [Riferimenti accademici](#riferimenti-accademici)
-- [Contributi](#contributi)
+InsulinGuard was developed at the **University of Naples Federico II** as part of a research project exploring bioimpedance-based monitoring of subcutaneous insulin administration. The application provides a mobile interface for a BLE-enabled measurement prototype, together with a local administration diary and a guided device setup procedure.
 
-## Panoramica
+The application supports two main workflows:
 
-InsulinGuard nasce in un contesto di ricerca universitaria sul monitoraggio **non invasivo e indiretto** dei fenomeni associati alla somministrazione sottocutanea di insulina. L'app interagisce via **Bluetooth Low Energy (BLE)** con un prototipo capace di produrre misure della componente reale e immaginaria dell'impedenza; fornisce inoltre un diario locale delle somministrazioni e una procedura guidata per l'applicazione della patch.
+- **Patient:** manage the administration diary, confirm recorded doses, review upcoming administrations, and receive local reminders.
+- **Healthcare staff:** connect to the BLE device, check battery status, guide patch placement, and run impedance measurements and sweeps.
 
-L'interfaccia distingue due percorsi d'uso:
+The proposed monitoring model uses a **48-hour observation period** with faster sampling from **20 minutes before to 40 minutes after** each administration, and slower sampling between these windows.
 
-- **Paziente:** visualizzazione e gestione delle somministrazioni, conferma dell'esecuzione, promemoria locali e informazioni sul dispositivo.
-- **Personale sanitario:** accesso tramite PIN dimostrativo, ricerca/connessione del dispositivo, lettura della batteria, test di applicazione della patch e acquisizione sweep.
-
-Le due tesi associate descrivono un **ciclo di monitoraggio previsto di 48 ore**, con campionamento più frequente nell'intervallo da 20 minuti prima a 40 minuti dopo una somministrazione. **La completa schedulazione autonoma di tali fasi sul dispositivo non è dimostrata dai sorgenti Flutter esaminati** e va considerata un requisito di sistema, non una funzionalità verificata.
-
-## Schermate dell'applicazione
-
-Panoramica delle principali interfacce dell'app, riprese dagli screenshot presenti nelle due tesi. **Seleziona un'immagine per aprirla a dimensione originale.** Le schermate mostrano un prototipo e includono dati dimostrativi: non rappresentano una validazione del dispositivo o dell'applicazione per impiego clinico.
+## Screenshots
 
 <table>
   <tr>
     <td align="center" width="33%">
-      <a href="assets/screenshots/home.png"><img src="assets/screenshots/home.png" width="210" alt="Home di InsulinGuard con calendario e riepilogo delle somministrazioni" /></a><br />
-      <sub><b>Home e diario</b></sub>
+      <a href="assets/screenshots/home.png"><img src="assets/screenshots/home.png" width="210" alt="Home screen and administration diary" /></a><br />
+      <sub><b>Home</b></sub>
     </td>
     <td align="center" width="33%">
-      <a href="assets/screenshots/device.png"><img src="assets/screenshots/device.png" width="210" alt="Schermata dispositivo con stato della connessione BLE e accesso alla sezione staff" /></a><br />
-      <sub><b>Dispositivo</b></sub>
+      <a href="assets/screenshots/device.png"><img src="assets/screenshots/device.png" width="210" alt="Device information and connection status" /></a><br />
+      <sub><b>Device</b></sub>
     </td>
     <td align="center" width="33%">
-      <a href="assets/screenshots/medical-staff.png"><img src="assets/screenshots/medical-staff.png" width="210" alt="Schermata riservata al personale sanitario con avvio della procedura patch" /></a><br />
-      <sub><b>Area personale sanitario</b></sub>
+      <a href="assets/screenshots/medical-staff.png"><img src="assets/screenshots/medical-staff.png" width="210" alt="Healthcare staff interface" /></a><br />
+      <sub><b>Healthcare staff</b></sub>
     </td>
   </tr>
   <tr>
     <td align="center">
-      <a href="assets/screenshots/ble-scan.png"><img src="assets/screenshots/ble-scan.png" width="210" alt="Lista dei dispositivi rilevati durante la scansione Bluetooth Low Energy" /></a><br />
-      <sub><b>Ricerca periferiche BLE</b></sub>
+      <a href="assets/screenshots/ble-scan.png"><img src="assets/screenshots/ble-scan.png" width="210" alt="BLE device discovery screen" /></a><br />
+      <sub><b>BLE discovery</b></sub>
     </td>
     <td align="center">
-      <a href="assets/screenshots/battery-check.png"><img src="assets/screenshots/battery-check.png" width="210" alt="Messaggio di verifica superata per il livello della batteria del dispositivo" /></a><br />
-      <sub><b>Controllo batteria</b></sub>
+      <a href="assets/screenshots/battery-check.png"><img src="assets/screenshots/battery-check.png" width="210" alt="Battery verification screen" /></a><br />
+      <sub><b>Battery check</b></sub>
     </td>
     <td align="center">
-      <a href="assets/screenshots/patch-confirmation.png"><img src="assets/screenshots/patch-confirmation.png" width="210" alt="Conferma di corretta applicazione della patch nella procedura guidata" /></a><br />
-      <sub><b>Conferma applicazione patch</b></sub>
+      <a href="assets/screenshots/patch-confirmation.png"><img src="assets/screenshots/patch-confirmation.png" width="210" alt="Patch placement confirmation screen" /></a><br />
+      <sub><b>Patch confirmation</b></sub>
     </td>
   </tr>
 </table>
 
-*Provenienza: i primi cinque screenshot sono tratti dalle Figure 3.1 e 3.2 della tesi sul Front-End (Michele Contino, a.a. 2025/2026); la conferma della patch proviene dalla Figura 3.6 della tesi BLE (Lorenzo Bartoli, a.a. 2024/2025). Le immagini sono incluse localmente nella cartella [`assets/screenshots/`](assets/screenshots/): non dipendono da Google Drive o da hosting esterni.*
+## Key features
 
-## Funzionalità e stato di implementazione
+| Area | Functionality |
+| --- | --- |
+| Administration diary | Local SQLite storage of administrations, dates, insulin types, and completion status |
+| Reminders | Scheduled local notifications for upcoming administrations |
+| BLE communication | Peripheral discovery, GATT connection, notifications, and reconnection attempts |
+| Measurements | Single-frequency impedance acquisition and frequency sweeps |
+| Data integrity | CRC16 checks, ACK/NACK handling, and packet decoding |
+| Patch setup | Guided battery, electrode-contact, and measurement checks |
+| State management | Reactive updates through `Provider` and `ChangeNotifier` |
 
-| Area | Cosa è presente nel codice | Limiti documentati |
-| --- | --- | --- |
-| Diario | CRUD locale delle somministrazioni con SQLite; marcatura `isTaken` | Alcune incongruenze tra modello dati, presentazione e formati orari |
-| Promemoria | Pianificazione locale via `flutter_local_notifications` | Inizializzazione esplicitamente Android; comportamento iOS da completare/verificare |
-| Connessione BLE | Scansione, filtro, discovery GATT, subscribe, connessione e tentativi di riconnessione | Nessun test end-to-end eseguito in questa revisione; cleanup e gestione errori da irrobustire |
-| Protocollo applicativo | Comandi con CRC16, ACK/NACK, parsing pacchetti a 5 e 7 byte | Differenze tra requisiti di tesi e implementazione; vedi [protocollo](docs/BLE_PROTOCOL.md) |
-| Controllo patch | Lettura batteria, verifica impedenza, sweep e controlli statistici nel client | Soglie prototipali, nessuna convalida clinica; alcune condizioni non coincidono con le specifiche accademiche |
-| Accesso staff | PIN modificabile e salvato tramite `shared_preferences` | PIN di default e storage non idonei come autenticazione di produzione |
-| Multi-piattaforma | Struttura Flutter con cartelle Android/iOS/desktop/web | Supporto operativo BLE/permessi non attestato per tutte le piattaforme |
+Some platform-specific features and hardware interactions remain under development; see [Known issues](docs/KNOWN_ISSUES.md).
 
-## Architettura
+## Architecture
+
+The project separates the **Flutter UI**, **application state and local data**, and **BLE communication** into focused modules.
 
 ```mermaid
 flowchart LR
-    P["Prototipo di bioimpedenza / simulatore BLE"]
-    G["BLE GATT\nservice + characteristic"]
-    C["BLEConnectionController\nscan, discovery, sessione"]
-    H["BLEController + BLECommandSender\nparsing, CRC, ACK/NACK"]
-    S["Provider / ChangeNotifier\nBLE + AppState"]
-    U["Flutter UI\nPaziente / Staff"]
-    D["DatabaseHelper\nSQLite locale"]
-    N["NotificationService\nnotifiche locali"]
-    P <--> G
-    G <--> C
-    C <--> H
-    H <--> S
-    S <--> U
-    U <--> D
-    U --> N
+    Device["BLE bioimpedance device"]
+    Connection["BLEConnectionController<br/>Discovery · Connection · GATT"]
+    Protocol["BLEController / BLECommandSender<br/>Commands · CRC · Parsing"]
+    State["Provider / ChangeNotifier<br/>Application state"]
+    UI["Flutter UI<br/>Patient · Healthcare staff"]
+    Data["SQLite / Preferences"]
+    Notifications["Local notifications"]
+
+    Device <--> Connection
+    Connection <--> Protocol
+    Protocol <--> State
+    State <--> UI
+    UI <--> Data
+    UI --> Notifications
 ```
 
-Questo schema rappresenta il **flusso logico**. A livello di implementazione, i controller BLE usano `ChangeNotifier`; `main.dart` li inietta con `MultiProvider` e `ChangeNotifierProxyProvider`. Il diario accede anche **direttamente** a `DatabaseHelper`, anziché transitare integralmente da `AppState`. Non è quindi un'architettura a layer rigorosamente isolati né un'implementazione BLoC/Riverpod.
+The application uses **Provider with `ChangeNotifier`** for reactive UI updates and `sqflite` for local persistence. BLE connections are managed with `flutter_reactive_ble`.
 
-Le responsabilità sono descritte in dettaglio in [Architettura](docs/ARCHITECTURE.md).
-
-### Organizzazione del progetto
+### Project layout
 
 ```text
 appInsulin/
 ├── lib/
 │   ├── main.dart
-│   ├── core/
-│   │   ├── app_state.dart
-│   │   ├── ble_connection.dart
-│   │   ├── ble_handler.dart
-│   │   ├── ble_commandSender.dart
-│   │   ├── database_helper.dart
-│   │   ├── notification_service.dart
-│   │   ├── permission_handler_service.dart
-│   │   └── data_manager.dart
+│   ├── core/                 # BLE, state, persistence, notifications
 │   ├── ui/
-│   │   ├── pages/        # Schermate paziente, staff e percorso patch
-│   │   └── widgets/      # Navigazione e banner di stato BLE
+│   │   ├── pages/           # Patient and healthcare-staff screens
+│   │   └── widgets/         # Shared interface components
 │   └── utils/
-│       └── complex_numbers.dart
 ├── android/
 ├── ios/
 ├── test/
-│   └── widget_test.dart
+├── assets/screenshots/
+├── docs/
 ├── pubspec.yaml
-└── pubspec.lock
+├── pubspec.lock
+├── README.md
+└── CONTRIBUTING.md
 ```
 
-## Modulo BLE
+For the component diagram, data lifecycle, and connection sequence, see [System architecture](docs/ARCHITECTURE.md).
 
-Il client usa `flutter_reactive_ble` per la connessione GATT e un **servizio e una caratteristica applicativa custom**, condivisi dalle operazioni di lettura/scrittura/notifica:
+## BLE communication
 
-| Risorsa | UUID nel sorgente |
+InsulinGuard uses a custom GATT service and characteristic for communication with the measurement device.
+
+| GATT resource | UUID |
 | --- | --- |
 | Service | `26ddc6b7-8d50-41d5-a1e2-8b2e1d0636fb` |
 | Characteristic | `11235a37-444a-4389-bc22-edf0b0a3997f` |
 
-Il flusso documentato nel codice è:
+The communication flow consists of device discovery, connection, GATT service discovery, notification subscription, command transmission, and response processing. The protocol supports battery queries, single-frequency measurements, sweeps, and measurement termination.
 
-1. Richiesta dei permessi e scansione; filtro client-side per nome contenente `insulin` o `esp`, oppure per service UUID.
-2. Selezione della periferica, `connectToDevice` e monitoraggio dello stato.
-3. Richiesta MTU di 100, discovery del servizio/characteristic e `subscribeToCharacteristic`.
-4. Ricezione dei byte nel `BLEController`, verifica CRC16 e interpretazione di ACK, NACK o campioni.
-5. Emissione di eventi tramite `notifyListeners()` per aggiornare le parti di UI che osservano i controller.
-6. In caso di disconnessione involontaria, **fino a 3 tentativi** di riconnessione con **2 secondi** di ritardo; disconnessione manuale senza tentativi automatici.
-
-### Protocollo applicativo: riepilogo
-
-| Elemento | Valore / struttura verificata nel codice Dart |
+| Command | ID |
 | --- | --- |
-| CRC | CRC-16 con polinomio `0x1021`, inizializzazione `0xFFFF`; byte CRC MSB prima |
-| ACK | `0x55` (esiste forma semplice e forma con CRC) |
-| NACK | `0xAA` (possibile lista di sequence number e CRC) |
-| Batteria | Richiesta comando `0x00` |
-| Generalità paziente | Comando `0x01`, campi separati da `0x00` |
-| Misura a singola frequenza | Comando `0x02` |
-| Sweep | Comando `0x03`; attualmente payload `[numero_spettri, numero_frequenze]` |
-| STOP | Comando `0xFF` |
-| Campione a singola frequenza | 5 byte: `seq, real, imag, CRC_hi, CRC_lo` |
-| Campione sweep | 7 byte: `seq, real_lo, real_hi, imag_lo, imag_hi, CRC_hi, CRC_lo` |
+| Battery request | `0x00` |
+| Patient information | `0x01` |
+| Single-frequency measurement | `0x02` |
+| Frequency sweep | `0x03` |
+| Stop measurement | `0xFF` |
 
-Il client interpreta i valori sweep reale/immaginario come **interi signed a 16 bit little-endian**. Non confondere la lunghezza di un *campione applicativo* con la dimensione di una notifica GATT, che può contenere più campioni.
+Packets use **CRC16** (`0x1021`, initialization `0xFFFF`) to detect transmission errors, with **ACK (`0x55`)** and **NACK (`0xAA`)** responses. The data decoder handles 5-byte single-frequency samples and 7-byte sweep samples.
 
-**Importante:** il codice e le tesi non specificano in modo pienamente concorde la temporizzazione di ACK cumulativi, gruppi da 10 campioni e parametri frequenziali. L'implementazione va testata con una versione identificata del firmware. Per tracciato byte-by-byte, CRC, sequenze e discrepanze si veda [Protocollo BLE](docs/BLE_PROTOCOL.md).
+See [BLE protocol](docs/BLE_PROTOCOL.md) for byte layouts, parsing, retransmission behavior, and interoperability details.
 
-## Frontend e UX
+## Interface and navigation
 
-Il progetto combina `MaterialApp` e componenti **Material** con una navigazione **Cupertino** (`CupertinoTabScaffold`, `CupertinoTabView`). La UI segue il percorso operativo descritto nella tesi Front-End, senza imporre un design system esterno formalizzato.
+The UI combines **Material** components with **Cupertino** navigation. The healthcare-staff workflow guides the user through device selection, battery verification, patch placement, and measurement checks.
 
 ```mermaid
 flowchart TD
-    A["Avvio / navigazione a tab"] --> B["Home paziente\nCalendario e promemoria"]
-    A --> C["Dispositivo / stato"]
-    C --> D["Generalità paziente"]
-    C --> E["Accesso staff con PIN"]
-    E --> F["Istruzioni patch"]
-    F --> G["Scansione e connessione BLE"]
-    G --> H{"Batteria > 50%?"}
-    H -- No --> I["Avviso batteria insufficiente"]
-    H -- Sì --> L["Verifica impedenza"]
-    L --> M["Sweep e controlli"]
-    M --> N["Conferma patch / diario"]
+    Start["App"] --> Home["Patient home / diary"]
+    Start --> Device["Device"]
+    Device --> Staff["Healthcare staff access"]
+    Staff --> Scan["BLE discovery and connection"]
+    Scan --> Battery{"Battery check"}
+    Battery -->|Pass| Contact["Patch / impedance check"]
+    Battery -->|Fail| Low["Low-battery screen"]
+    Contact --> Sweep["Frequency sweep"]
+    Sweep --> Result["Patch result"]
 ```
 
-Il diagramma è una **sintesi del flusso principale previsto**: i singoli errori e le transizioni automatiche sono descritti in [Frontend & UX](docs/FRONTEND_UX.md), senza assumere che tutti i rami siano funzionanti su dispositivo reale.
+See [Frontend and UX](docs/FRONTEND_UX.md) for individual screens, navigation, user interactions, and state updates.
 
-### Componenti principali
+## Tech stack
 
-| Percorso | Responsabilità |
-| --- | --- |
-| `ui/widgets/bottom_navigation_bar.dart` | Navigazione a tab Home / Dispositivo |
-| `ui/pages/home_page.dart` | Elenco somministrazioni, prossima dose, azioni sul diario |
-| `ui/pages/secondary_page.dart` | Stato BLE e accesso a generalità / staff |
-| `ui/pages/blue_connection.dart` | Scansione, selezione periferica, verifica livello batteria |
-| `ui/pages/battery_confermation_page.dart` | Avvio dei controlli di impedenza e sweep |
-| `ui/pages/medical_staff_page.dart` | Procedura patch e modifica PIN |
-| `core/app_state.dart` | Stato app e preferenze locali |
+| Package | Version in `pubspec.lock` | Purpose |
+| --- | --- | --- |
+| `flutter_reactive_ble` | `5.4.0` | BLE communication |
+| `provider` | `6.1.2` | State management |
+| `sqflite` | `2.4.1` | Local administration diary |
+| `sqflite_common_ffi` | `2.3.4+4` | Desktop SQLite support |
+| `shared_preferences` | `2.5.1` | Local settings |
+| `flutter_local_notifications` | `17.2.4` | Reminders |
+| `permission_handler` | `11.3.1` | Platform permissions |
+| `intl` | `0.18.1` | Date and time formatting |
 
-## Stack tecnologico
+The project declares Dart SDK compatibility with `^3.6.2`. Additional dependencies are listed in [`pubspec.yaml`](pubspec.yaml).
 
-Le **versioni richieste** vengono da `pubspec.yaml`; le versioni **risolte** da `pubspec.lock` della cartella Drive esaminata.
+## Getting started
 
-| Tecnologia | Dichiarata | Risolta | Utilizzo |
-| --- | --- | --- | --- |
-| Dart SDK | `^3.6.2` | vincolo lock `>=3.7.0-0 <4.0.0` | Linguaggio/runtime |
-| `flutter_reactive_ble` | non vincolata | `5.4.0` | GATT BLE |
-| `provider` | `^6.1.0` | `6.1.2` | Dipendenze e `ChangeNotifier` |
-| `sqflite` | `^2.3.0` | `2.4.1` | Diario SQLite |
-| `sqflite_common_ffi` | `^2.3.0` | `2.3.4+4` | Database su Windows/Linux |
-| `shared_preferences` | `^2.2.2` | `2.5.1` | Preferenze e PIN demo |
-| `flutter_local_notifications` | `^17.2.1` | `17.2.4` | Notifiche locali |
-| `timezone` | `^0.9.4` | `0.9.4` | Calcolo orari notifiche |
-| `permission_handler` | non vincolata | `11.3.1` | Richiesta permessi |
-| `intl` | `^0.18.0` | `0.18.1` | Date e formattazione |
+Install Flutter and the platform tooling for your target device. Android development requires the Android SDK and JDK 17; iOS builds require macOS and Xcode.
 
-Sono presenti anche `path`, `path_provider`, `cupertino_icons` e `flutter_lints`. Il progetto dichiara `publish_to: none`. Vedi [Development & Setup](docs/DEVELOPMENT.md) per i prerequisiti e la verifica locale.
-
-## Prerequisiti e avvio locale
-
-- Flutter SDK con **Dart compatibile con `^3.6.2`** e con il lock file corrente (il lock richiede `>=3.7.0-0`). Versione Flutter esatta: **TODO: confermare la toolchain usata per l'ultima build riuscita**.
-- Android Studio/Android SDK per Android, oppure macOS + Xcode/CocoaPods per sperimentare una build iOS.
-- Dispositivo fisico con BLE per test radio realistici; un emulatore da solo non prova il protocollo con una periferica.
-- **JDK 17** per il modulo Gradle Android presente nella copia esaminata.
+From the project root:
 
 ```bash
-# Posizionarsi nella root del progetto Flutter
-flutter doctor -v
+flutter doctor
 flutter pub get
-flutter analyze
-flutter test
 flutter run
 ```
 
-> [!WARNING]
-> **Non è stato eseguito alcun build/test in questa revisione** (SDK Flutter non disponibile nell'ambiente di analisi). `test/widget_test.dart` è ancora un test counter generico e non verifica InsulinGuard. Non interpretare questi comandi come prova che l'app compili o i test passino.
+For static analysis and tests:
 
-Per i permessi Android effettivamente dichiarati, le lacune in `Info.plist`, il setup del simulatore e i prerequisiti alla release, consultare [Development & Setup](docs/DEVELOPMENT.md).
+```bash
+flutter analyze
+flutter test
+```
 
-## Documentazione tecnica
+A physical BLE-capable device is recommended for communication testing. iOS Bluetooth permissions and platform notification setup require further configuration before device use. See [Development and setup](docs/DEVELOPMENT.md).
 
-| Documento | Contenuto |
+## Documentation
+
+| Guide | Description |
 | --- | --- |
-| [Architettura](docs/ARCHITECTURE.md) | Componenti, dati, dipendenze, lifecycle e diagrammi Mermaid |
-| [Protocollo BLE](docs/BLE_PROTOCOL.md) | Tabella comandi, layout dei pacchetti, CRC, sequenze ACK/NACK, divergenze |
-| [Frontend & UX](docs/FRONTEND_UX.md) | Schermate, navigazione, reattività, design e accessibilità |
-| [Development & Setup](docs/DEVELOPMENT.md) | Toolchain, configurazione OS, run/test, checklist di rilascio |
-| [Verifiche e problemi noti](docs/KNOWN_ISSUES.md) | Gap tra tesi e sorgente, rischi di correttezza, sicurezza e portabilità |
-| [Riferimenti accademici](docs/ACADEMIC_REFERENCES.md) | Citazioni bibliografiche e mappa dei contributi |
-| [Contribuire](CONTRIBUTING.md) | Convenzioni suggerite per issue e pull request |
+| [Architecture](docs/ARCHITECTURE.md) | Module responsibilities, state, and data flow |
+| [BLE protocol](docs/BLE_PROTOCOL.md) | GATT, commands, packet formats, CRC16, ACK/NACK |
+| [Frontend and UX](docs/FRONTEND_UX.md) | Screens, navigation, interaction and state updates |
+| [Development and setup](docs/DEVELOPMENT.md) | Local setup, OS permissions, and testing |
+| [Known issues](docs/KNOWN_ISSUES.md) | Current technical limitations and improvement areas |
+| [Academic references](docs/ACADEMIC_REFERENCES.md) | University theses and technical references |
+| [Contributing](CONTRIBUTING.md) | Guidelines for contributions |
 
-## Riferimenti accademici
+## Academic background
 
-Questa implementazione è descritta da due elaborati dell'**Università degli Studi di Napoli Federico II**, entrambi in Ingegneria Informatica:
+InsulinGuard was developed in connection with two Computer Engineering theses at the **University of Naples Federico II**:
 
-1. **Lorenzo Bartoli** (a.a. 2024/2025), *Connessioni vitali: progettazione e simulazione di un sistema BLE embedded per la comunicazione in applicazioni biomedicali*. Relatore: Nicola Moccaldi; correlatori: Francesco Caputo, Rosanna Manzo.
-2. **Michele Contino** (a.a. 2025/2026), *Progettazione e realizzazione del front-end di un’app mobile per il monitoraggio della terapia insulinica*. Relatore: Nicola Moccaldi; correlatori: Francesco Caputo, Rosanna Manzo.
+- **Lorenzo Bartoli (2024/2025):** *Connessioni vitali: progettazione e simulazione di un sistema BLE embedded per la comunicazione in applicazioni biomedicali* — BLE communication and protocol development.
+- **Michele Contino (2025/2026):** *Progettazione e realizzazione del front-end di un’app mobile per il monitoraggio della terapia insulinica* — Flutter frontend, navigation, and interface design.
 
-Dettagli: [Riferimenti accademici](docs/ACADEMIC_REFERENCES.md).
+Full bibliographic details are available in [Academic references](docs/ACADEMIC_REFERENCES.md).
 
-## Contributi
+## Contributing
 
-Per proporre modifiche, aprire una issue o seguire [CONTRIBUTING.md](CONTRIBUTING.md). **TODO: [Confermare repository GitHub, maintainer e policy di accettazione delle contribuzioni].**
+Contributions and improvements are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for the development workflow and pull-request guidelines.

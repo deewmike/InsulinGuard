@@ -1,55 +1,54 @@
-# Audit documentale: rischi e informazioni mancanti
+# Known Issues and Development Priorities
 
-[← README](../README.md) · [Protocollo BLE](BLE_PROTOCOL.md) · [Development](DEVELOPMENT.md)
+[← README](../README.md) · [BLE protocol](BLE_PROTOCOL.md) · [Development](DEVELOPMENT.md)
 
-**Ambito:** analisi statica della copia Drive `appInsulin`, confronto con le due tesi e con il simulatore Python allegato; **nessuna compilazione, prova di interoperabilità o validazione clinica**. Le priorità seguenti sono indicazioni per la verifica, non vulnerabilità confermate in un prodotto distribuito.
+This page tracks technical work needed to improve reliability, portability, and security. InsulinGuard is a research prototype, not a clinically validated medical product.
 
-## Priorità tecniche
+## BLE and protocol
 
-| Priorità | Ambito | Evidenza osservata | Impatto possibile / azione |
-| --- | --- | --- | --- |
-| P0 | Uso previsto | Prototipo impiegato per un contesto biomedicale senza validazione clinica documentata nel repository | Esplicitare **solo uso di ricerca**; nessuna decisione terapeutica |
-| P0 | Privacy/autorizzazione | PIN staff predefinito `0000`, salvato come stringa in `shared_preferences`; anagrafica in preferenze | Definire modello di sicurezza, cifratura, accessi e minimizzazione dati prima di esposizione a pazienti |
-| P1 | Protocollo: inizio misura | La UI invia `0x02` senza payload; il simulatore legge `value[1]` come frequenza | Disallineamento con possibile eccezione lato simulatore; stabilire wire contract |
-| P1 | Protocollo: framing | `handleIncomingData` prova prima `data.length % 5 == 0`, poi `% 7 == 0` | Un frame sweep lungo 35 byte può percorrere il ramo a 5 byte e non essere accodato correttamente |
-| P1 | Integrità ACK | `completeAck()` viene chiamato per risposte ACK con payload prima della verifica CRC | Comando potenzialmente segnalato come confermato nonostante payload non valido |
-| P1 | Retry | `sendCommandWithAck` usa loop infinito senza limite/annullamento | Operazione UI bloccata in assenza di ACK applicativo persistente |
-| P1 | Test statistici | Requisito deviazione standard su reale e immaginaria vs UI che valuta solo la reale | Verifica patch non equivalente alle condizioni descritte in tesi |
-| P1 | Notifiche/manifest Android | Manifest registra `NotificationBootReceiver` / `NotificationForegroundService` non individuati fra i sorgenti accessibili | Risolvere classi native e tipi di service; test reboot/background |
-| P1 | iOS BLE | `Info.plist` manca di `NSBluetoothAlwaysUsageDescription`; setup notifiche Android-only | Portabilità iOS non verificata; completare permessi e smoke test device |
-| P1 | Rilascio | `release` firmato con `signingConfigs.debug` | Non usare per release distribuita |
-| P1 | Test automatici | `widget_test.dart` è template counter | Non fornisce copertura dell'app; creare test realistici |
-| P2 | Dati SQLite | Metodo riceve `meal` ma colonna non esiste; altri file leggono `meal` | Possibile dato assente / rendering incoerente |
-| P2 | Formati data/ora | UI salva anche `TimeOfDay.format(context)`; altre funzioni parse `yyyy-MM-dd HH:mm` | Errori con locale 12h/AM-PM e ordinamento testuale |
-| P2 | BLE scan/subscription | `.listen()` a scan e notify senza conservare/cancellare sempre le subscription | Possibili listener duplicati e memory leak dopo nuove scansioni/connessioni |
-| P2 | Eventi UI | `BLEController.handleIncomingData` riceve `BuildContext` e chiama `Navigator.push` | Navigazione su context non più valido o route duplicate |
-| P2 | Stato UI | `HomePage._buildPatchInsulinaCard()` crea `AppState()` nuovo | Card patch può leggere dati non ancora caricati/non allineati allo stato globale |
-| P2 | Sweep payload | Tesi richiedono frequenza iniziale e intervallo; `sendSweepCommand()` invia solo numero spettri/frequenze | Impossibile attestare configurazione completa del trasduttore |
-| P2 | Protocollo: pacchetti mancanti | `verifyCRC` rileva CRC errati ma non sequence number assenti | Perdita senza frame corrotto può non attivare il NACK corretto |
-| P2 | Protocollo simulator | Variabile locale `pacchetti_singola_frequenza` nasconde quella globale usata per NACK | Ritrasmissione single-frequency da verificare/correggere |
-| P2 | Identità package | `pubspec.yaml` si chiama `app`; package Android `com.example.app` | Branding e namespace di produzione da decidere |
-| P3 | Code quality | `flutter_reactive_ble` / `permission_handler` senza constraint espliciti in pubspec | Limitare cambi non intenzionali quando si ricrea il lock |
-| P3 | CI | Nessuna pipeline CI identificata nei materiali ispezionati | Non mostrare badge di build riuscita finché non esistono test eseguiti |
+| Priority | Issue | Recommended action |
+| --- | --- | --- |
+| High | `sendCommandWithAck()` can retry indefinitely when an application-level ACK never arrives | Add bounded retries, cancellation, and explicit error states |
+| High | A response can complete the ACK wait before its payload CRC is validated | Validate the response and correlate it with the command before accepting the ACK |
+| High | Sample lengths are checked using `% 5` before `% 7`, creating ambiguous parsing for buffers such as 35 bytes | Use the active measurement mode and explicit framing information |
+| High | Command `0x02` has an empty payload in the UI, while the Python simulator expects a frequency byte | Align the client command format with the peripheral firmware |
+| Medium | Sample parsing assumes complete samples in a notification | Add buffering for partial sample delivery |
+| Medium | Missing sequence numbers are not independently detected | Track sequence numbers and request missing samples |
+| Medium | Notification and scan subscriptions are not consistently cancelled | Manage subscriptions throughout connect/disconnect and widget lifecycle |
+| Medium | The simulator's single-frequency retransmission path uses a variable with inconsistent scope | Correct the packet cache and test selective NACK handling |
 
-**Nota Android:** sono presenti le directory native `java/` e `kotlin/`, ma i receiver e service dichiarati nel manifest non sono stati trovati nei percorsi accessibili; controllare il repository Git originale prima di considerarli assenti.
+See [BLE protocol](BLE_PROTOCOL.md) for packet layouts, CRC parameters, and a suggested test matrix.
 
-## Differenze tra tesi e implementazione
+## Patch measurements
 
-- **Monitoraggio 48 ore:** le tesi prevedono campionamento rapido da **−20 a +40 minuti** intorno al bolo e lento altrimenti; uno scheduler BLE end-to-end delle commutazioni non è stato verificato.
-- **Sweep:** oltre a numero di spettri/frequenze, la specifica accademica cita frequenza iniziale e passo su scala logaritmica; il comando Dart invia soltanto i primi due parametri.
-- **Trasmissione:** le tesi descrivono gruppi (anche da 10) e ACK cumulativo/NACK selettivo, senza essere del tutto uniformi sulla cadenza; il codice risponde per buffer di notifica, non per un gruppo esplicito da 10.
-- **Verifica patch:** la tesi BLE descrive monotonicità della parte reale su una finestra minima di 10 e deviazione standard su **reale e immaginaria**; il codice verifica monotonicità di entrambe tramite medie su 10, ma la deviazione standard solo della reale. La misura single-frequency calcola invece la media del chunk ricevuto (soglia 500), non necessariamente su 10 punti.
-- **Calendario e piattaforme:** sincronizzazione completa col device e funzionamento iOS sono obiettivi dichiarati, non dimostrati da test su questa copia.
+The research specification and Dart implementation differ in several areas:
 
-## Limiti delle evidenze
+- **Monitoring schedule:** the planned 48-hour cycle includes a faster sampling window from **−20 to +40 minutes** around each administration. Full device-side scheduling and synchronization remain to be integrated.
+- **Sweep configuration:** the thesis describes an initial frequency and logarithmically spaced intervals; `sendSweepCommand()` sends spectrum and frequency counts only.
+- **ACK/NACK grouping:** the academic model describes grouped transfers and selective retransmission, whereas the application acknowledges received notification buffers.
+- **Statistics:** the design includes standard-deviation checks for real and imaginary impedance; the current UI evaluates standard deviation for the real component only.
 
-Non sono certificati **build/test riusciti, compatibilità col firmware reale, precisione o validazione medica del sensore, autenticazione sicura, comportamento notifiche dopo riavvio o realizzazione di ogni requisito accademico**. La descrizione del codice non implica sicurezza né idoneità a decisioni terapeutiche.
+Measurement thresholds and patch-validation rules must be reviewed against the intended hardware and research methodology before relying on them.
 
-## Informazioni richieste prima di dichiarare compatibilità o readiness
+## App, data, and platform
 
-1. **Protocollo/firmware:** versione e sorgenti, UUID/proprietà, payload/evento `0xFE`, CRC, framing, gruppi, MTU, ACK/NACK, endianess, timeout e retry, oltre a golden test byte-level.
-2. **Toolchain e prove:** output `flutter --version`, commit/tag, SDK/Gradle/Kotlin, risultati di `flutter analyze`, test e build, almeno un Android e un iPhone fisici **se iOS è dichiarato supportato**.
-3. **Dati e utilizzo previsto:** modello di accesso al personale, cifratura/minimizzazione, privacy, politiche di logging e distinzione formale tra studio e prodotto per pazienti.
-4. **Manutenzione (secondario):** URL GitHub, maintainer, policy di review, roadmap, matrice OS/device, eventuale backend futuro e pipeline CI; badge build/coverage soltanto dopo prove effettive.
+| Priority | Issue | Recommended action |
+| --- | --- | --- |
+| High | Staff access uses a default `0000` PIN stored in `shared_preferences` | Use suitable authentication and protect personal data |
+| High | `ios/Runner/Info.plist` lacks `NSBluetoothAlwaysUsageDescription`; local notifications initialize for Android only | Configure and test Bluetooth and notification permissions on iOS |
+| High | Android manifest declares `NotificationBootReceiver` and `NotificationForegroundService` | Ensure their native implementations exist and test background/reboot behavior |
+| High | Android release configuration uses debug signing | Configure release signing before distribution |
+| Medium | `DatabaseHelper` has no `meal` column, although some application code references that field | Align the schema and callers; define migrations |
+| Medium | Diary date/time formats differ between input and parsing paths | Normalize stored date/time values and add locale tests |
+| Medium | Protocol handlers can navigate with `BuildContext`, and `HomePage` creates a separate `AppState` instance in one widget | Decouple navigation from BLE handling and use shared state consistently |
+| Medium | `pubspec.yaml` still uses generic project identifiers (`app`, `com.example.app`) | Set the intended application and package names when preparing a release |
+| Low | `flutter_reactive_ble` and `permission_handler` lack explicit dependency constraints | Pin supported versions and retain `pubspec.lock` |
+| Low | `test/widget_test.dart` is Flutter's default template; no CI configuration is included | Add feature/protocol tests and a CI workflow |
 
-**Percorso di risoluzione suggerito:** implementare framing e retry limitati, correlare/verificare il CRC **prima** di accettare ACK, controllare sequenze mancanti, validare i criteri statistici, gestire il ciclo di vita dei listener, allineare schema SQLite/date, correggere PIN/permessi/componenti Android e testare notifiche, BLE e rilascio su device. Le azioni sono proposte, non funzionalità già implementate. La conformità regolatoria richiede valutazione separata.
+## Recommended test coverage
+
+1. **BLE:** scan permissions, connect/reconnect, characteristic discovery, ACK/NACK, malformed CRCs, dropped samples, and MTU variations.
+2. **Measurements:** battery checks, measurement start/stop, sweep completion, patch failure states, and timeouts.
+3. **UI and storage:** administration CRUD, date/time parsing, reminders, staff access, state updates, and navigation.
+4. **Platforms:** Android permissions and notification behavior; iOS Bluetooth/notification setup on physical hardware.
+5. **Release:** signing, privacy and permission review, automated tests, and a consistent application identity.

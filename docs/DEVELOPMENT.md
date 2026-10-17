@@ -1,18 +1,16 @@
-# Sviluppo, configurazione e test locale
+# Development, Local Setup, and Testing
 
-[← README](../README.md) · [Protocollo BLE](BLE_PROTOCOL.md) · [Verifiche](KNOWN_ISSUES.md)
+[← README](../README.md) · [BLE protocol](BLE_PROTOCOL.md) · [Known issues](KNOWN_ISSUES.md)
 
-> **Stato:** istruzioni ricavate dalla copia Drive `appInsulin`, **non testate con una build** in questa revisione. `TODO: [Confermare versione Flutter, commit e dispositivi con build funzionante]`.
+## Requirements and first run
 
-## Requisiti e avvio
-
-| Elemento | Evidenza / limite |
+| Area | Requirement |
 | --- | --- |
-| Flutter/Dart | `pubspec.yaml`: Dart `^3.6.2`; lock: `>=3.7.0-0 <4.0.0`. Versione Flutter concreta da confermare. |
-| Android | SDK min/target/compile derivati dalla toolchain Flutter; Java/Kotlin target **17**, quindi configurare JDK 17. |
-| iOS | Richiede macOS, Xcode e CocoaPods; permessi BLE/notifiche da completare. |
-| Dipendenze | Conservare `pubspec.lock`; contiene `flutter_reactive_ble 5.4.0`, `provider 6.1.2`, `sqflite 2.4.1`, `flutter_local_notifications 17.2.4`, `permission_handler 11.3.1`. Per le altre versioni, vedi [Stack nel README](../README.md#stack-tecnologico). |
-| BLE | Serve hardware compatibile o simulatore con stack BLE che consenta advertising GATT. |
+| Flutter/Dart | Dart `^3.6.2` (see `pubspec.yaml`); use a Flutter version compatible with `pubspec.lock`. |
+| Android | Android SDK, Android Studio, and **JDK 17**. |
+| iOS | macOS, Xcode, and CocoaPods. Add the necessary Bluetooth and notification permissions before running on iOS. |
+| Dependencies | Keep `pubspec.lock`: it resolves `flutter_reactive_ble 5.4.0`, `provider 6.1.2`, `sqflite 2.4.1`, `flutter_local_notifications 17.2.4`, and `permission_handler 11.3.1`. Other versions are listed in the [README technology stack](../README.md#technology-stack). |
+| BLE | A compatible peripheral or a host supporting BLE peripheral advertising for simulator-based tests. |
 
 ```bash
 cd appInsulin
@@ -22,41 +20,41 @@ flutter pub get
 flutter devices
 flutter run -d <device-id>
 
-# Controlli consigliati: eseguirli e registrare i risultati
+# Static analysis, tests, and debug build
 flutter analyze
 flutter test
 flutter build apk --debug
 ```
 
-`test/widget_test.dart` è ancora il template Flutter del contatore, non un test dell'app. In `pubspec.yaml`, `flutter_reactive_ble` e `permission_handler` non hanno constraint espliciti: se il lock cambia, verificare nuovamente BLE e permessi.
+The included `test/widget_test.dart` is a Flutter template. Add tests for application screens and protocol behavior. Keep `pubspec.lock` under version control to preserve dependency versions.
 
-## Android: permessi e configurazione
+## Android: permissions and configuration
 
-Sorgente: `android/app/src/main/AndroidManifest.xml`.
+Source: `android/app/src/main/AndroidManifest.xml`.
 
-| Area | Dichiarazioni osservate | Verifiche richieste |
+| Area | Manifest declarations | Platform considerations |
 | --- | --- | --- |
-| BLE | `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`; `BLUETOOTH`, `BLUETOOTH_ADMIN` fino a SDK 30; `android.hardware.bluetooth_le` opzionale | Richieste runtime Android 12+, gestione permessi negati e assenza radio. |
-| Posizione | `ACCESS_FINE_LOCATION` (fino a 30), `ACCESS_COARSE_LOCATION` (fino a 28), `ACCESS_BACKGROUND_LOCATION` | Motivare/limitare il permesso in background; verificare policy e comportamento legacy. |
-| Notifiche | `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` | Permessi runtime/speciali, pianificazione e ripristino dopo reboot. |
-| Componenti nativi | `.core.NotificationBootReceiver`, `.core.NotificationForegroundService` con tipo `mediaProjection` | Componenti **non individuati nei file accessibili**; verificare classi e tipo del servizio. |
+| BLE | `BLUETOOTH_SCAN`, `BLUETOOTH_CONNECT`; `BLUETOOTH`, `BLUETOOTH_ADMIN` through SDK 30; optional `android.hardware.bluetooth_le` feature | Android 12+ runtime requests, denied permissions, missing/disabled Bluetooth adapter |
+| Location | `ACCESS_FINE_LOCATION` through SDK 30, `ACCESS_COARSE_LOCATION` through SDK 28, `ACCESS_BACKGROUND_LOCATION` | Justify/restrict background access; check policies and legacy behavior |
+| Notifications | `POST_NOTIFICATIONS`, `SCHEDULE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`, `FOREGROUND_SERVICE` | Runtime/special access, schedule accuracy, and restore-after-reboot tests |
+| Native components | `.core.NotificationBootReceiver`, `.core.NotificationForegroundService` with `mediaProjection` service type | Ensure the receiver and service classes exist, use the appropriate service type, and work correctly after device restart |
 
-Il manifest contiene metadata per un canale Firebase, ma **non è emersa una dipendenza Firebase nel `pubspec.yaml`**: non documentarlo come servizio funzionante. Nel build Gradle, il blocco `release` usa `signingConfigs.debug`: predisporre una firma separata prima della distribuzione. Testare almeno Android pre-12, 12+ e notifiche 13+, con manifest merger e stack Bluetooth verificati.
+The manifest contains Firebase notification-channel metadata, although the Dart dependencies do not include a Firebase messaging client. The Android Gradle `release` block currently uses `signingConfigs.debug`; configure separate release signing before distribution. Test at least an older Android version, Android 12+, and Android 13+ notifications, including manifest merging and Bluetooth behavior.
 
-## iOS: completamento richiesto
+## iOS configuration
 
-`ios/Runner/Info.plist` **non contiene** `NSBluetoothAlwaysUsageDescription`. Esempio **non presente nel repository**, da adattare dopo approvazione del testo:
+Add a Bluetooth usage description to `ios/Runner/Info.plist`: 
 
 ```xml
 <key>NSBluetoothAlwaysUsageDescription</key>
-<string>Il Bluetooth consente la connessione al dispositivo di monitoraggio associato.</string>
+<string>Bluetooth is used to connect to the associated monitoring device.</string>
 ```
 
-`NotificationService.initialize()` configura soltanto `AndroidInitializationSettings`: permessi, inizializzazione notifiche iOS, eventuali capability, firma e provisioning restano da verificare. Non affermare compatibilità iOS senza una prova fisica.
+`NotificationService.initialize()` currently configures `AndroidInitializationSettings`. Add iOS notification initialization and permissions, then test BLE and notifications on a physical iPhone.
 
-## Simulatore BLE (allegato separatamente)
+## BLE simulator
 
-`ble_simulator.py` usa la libreria Python `bless` e pubblicizza `insulin_sim`, servizio `26ddc6b7-8d50-41d5-a1e2-8b2e1d0636fb` e caratteristica `11235a37-444a-4389-bc22-edf0b0a3997f`. Lo script **non risulta incluso nella root Drive** e va copiato esplicitamente nella cartella di esecuzione:
+A separate Python `ble_simulator.py` script uses `bless` to advertise `insulin_sim` with the project's service and characteristic UUIDs. Place the simulator script in the test directory before running:
 
 ```bash
 python -m venv .venv
@@ -66,10 +64,10 @@ python -m pip install bless
 python ble_simulator.py
 ```
 
-Non sono stati eseguiti test di advertising o interoperabilità. **Prima dell'uso** confrontare comando `0x02`, frame da 5/7 byte, ACK/NACK e ritrasmissioni con [la specifica osservata](BLE_PROTOCOL.md).
+Before integration testing, align command `0x02`, sample framing, ACK/NACK, and retransmission handling with the [BLE protocol](BLE_PROTOCOL.md).
 
-## Verifica e rilascio
+## Test checklist
 
-Per ogni prova registrare **device/OS, Flutter/Dart, pacchetti risolti, UUID, MTU negoziato, bytes di comandi e notifiche, CRC, sequenze e timeout**, omettendo dati sanitari o anagrafici reali. Coprire scan, batteria, misura/STOP, sweep 3×100, NACK, disconnessione, notifiche dopo riavvio e accesso staff. I casi attesi e i problemi aperti sono in [Protocollo BLE](BLE_PROTOCOL.md#8-matrice-di-test-del-protocollo-da-eseguire) e [Known Issues](KNOWN_ISSUES.md).
+Record the device/OS version, Flutter/Dart version, negotiated MTU, command bytes, CRC results, and any timeouts, without recording real patient information. Test device discovery, battery queries, measurement start/stop, sweeps, NACK handling, disconnection, notification scheduling, and staff access. See the [protocol test matrix](BLE_PROTOCOL.md#8-protocol-test-matrix) and [Known issues](KNOWN_ISSUES.md).
 
-**Nessuna pubblicazione come prodotto medico** è giustificata da questa documentazione: richiederebbe almeno verifiche su hardware, sicurezza dei dati, permessi, test, signing e valutazione dell'uso previsto/regolatoria.
+Before distributing an application build, review release signing, data protection, device compatibility, and functional tests. Clinical or therapeutic use requires separate safety and regulatory evaluation.

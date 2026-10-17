@@ -1,19 +1,19 @@
-# Contribuire a InsulinGuard
+# Contributing to InsulinGuard
 
-InsulinGuard è un **prototipo accademico**. Il flusso seguente è **proposto** e non costituisce una policy già approvata dai maintainer.
+InsulinGuard welcomes improvements to the Flutter interface, BLE communication, testing, and documentation.
 
-## Proporre una modifica
+## Proposing a change
 
-1. Aprire una issue con problema, impatto, passi per riprodurlo e file coinvolti.
-2. Creare una pull request limitata allo scopo dell'issue e aggiornare README o `/docs` quando cambia un comportamento.
-3. Allegare `flutter analyze`, `flutter test` e prove su device/OS dichiarati; **non indicare test come superati se non eseguiti**. Il test widget esistente è un template, non una copertura significativa.
+1. Open an issue describing the problem, its impact, reproduction steps, and affected files.
+2. Submit a pull request scoped to the issue. Update the README or `/docs` whenever behavior or interfaces change.
+3. Include results from `flutter analyze`, `flutter test`, and relevant device/OS checks. Add or update tests when changing application behavior.
 
-## Checklist PR
+## Pull request checklist
 
-- [ ] **BLE:** riportati byte/CRC di esempio, compatibilità firmware/simulatore e test per ACK/NACK, timeout ed errori (se pertinenti).
-- [ ] **UI:** considerati caricamento, permessi negati, disconnessioni, accessibilità e navigazione.
-- [ ] **Dati:** previste migrazioni e test SQLite per cambi di schema; niente dati sanitari reali, identificativi o segreti in codice, screenshot e log.
-- [ ] **Lifecycle:** subscription/controller rilasciati correttamente, nessuna gestione di errori nascosta.
-- [ ] **Piattaforme:** compatibilità Android/iOS rivendicata solo dove effettivamente testata.
+- [ ] **BLE:** provide example bytes/CRC values, simulator/firmware compatibility notes, and appropriate ACK/NACK, timeout, and error tests.
+- [ ] **UI:** cover loading states, denied permissions, disconnects, accessibility, and navigation.
+- [ ] **Data:** plan SQLite migrations and tests for schema changes; exclude real health records, identifiers, and secrets from source, screenshots, and logs.
+- [ ] **Lifecycle:** release subscriptions/controllers correctly and do not suppress errors without handling them.
+- [ ] **Platforms:** claim Android/iOS compatibility only for environments actually tested.
 
-Le questioni prioritarie (framing BLE, CRC/ACK, retry, permessi iOS, manifest Android e PIN dimostrativo) sono in [docs/KNOWN_ISSUES.md](docs/KNOWN_ISSUES.md).
+See [Known issues](docs/KNOWN_ISSUES.md) for current technical priorities.

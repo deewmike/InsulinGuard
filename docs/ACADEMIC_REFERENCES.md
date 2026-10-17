@@ -1,36 +1,28 @@
-# Riferimenti accademici e tracciabilità
+# Academic References and Traceability
 
-[← README](../README.md) · [Architettura](ARCHITECTURE.md) · [Frontend & UX](FRONTEND_UX.md)
+[← README](../README.md) · [Architecture](ARCHITECTURE.md) · [Frontend and UX](FRONTEND_UX.md)
 
-## Citazioni delle tesi
+## Thesis citations
 
-**Modulo BLE**
+**BLE module**
 
-Bartoli, Lorenzo. *Connessioni vitali: progettazione e simulazione di un sistema BLE embedded per la comunicazione in applicazioni biomedicali*. Elaborato finale in Fondamenti di misure, Corso di Laurea in Ingegneria Informatica, Scuola Politecnica e delle Scienze di Base, Università degli Studi di Napoli Federico II, **anno accademico 2024/2025**. Relatore: **Ch.mo Prof. Nicola Moccaldi**. Correlatori: **Ing. Francesco Caputo** e **Ing. Rosanna Manzo**.
+Bartoli, Lorenzo. *Connessioni vitali: progettazione e simulazione di un sistema BLE embedded per la comunicazione in applicazioni biomedicali* [*Vital Connections: Design and Simulation of an Embedded BLE System for Communication in Biomedical Applications*]. Final project in Fundamentals of Measurement, Degree in Computer Engineering, Polytechnic School and Basic Sciences, University of Naples Federico II, **academic year 2024/2025**. Supervisor: **Prof. Nicola Moccaldi**. Co-supervisors: **Eng. Francesco Caputo** and **Eng. Rosanna Manzo**.
 
-**Modulo Front-End / UI/UX**
+**Frontend / UI/UX module**
 
-Contino, Michele. *Progettazione e realizzazione del front-end di un’app mobile per il monitoraggio della terapia insulinica*. Tesi di Laurea in Ingegneria Informatica, Dipartimento di Ingegneria Elettrica e delle Tecnologie dell'Informazione (DIETI), Università degli Studi di Napoli Federico II, **anno accademico 2025/2026**. Relatore: **Ch.mo Prof. Nicola Moccaldi**. Correlatori: **Ing. Francesco Caputo** e **Ing. Rosanna Manzo**.
+Contino, Michele. *Progettazione e realizzazione del front-end di un’app mobile per il monitoraggio della terapia insulinica* [*Design and Implementation of the Frontend of a Mobile Application for Monitoring Insulin Therapy*]. Bachelor's thesis in Computer Engineering, Department of Electrical Engineering and Information Technology (DIETI), University of Naples Federico II, **academic year 2025/2026**. Supervisor: **Prof. Nicola Moccaldi**. Co-supervisors: **Eng. Francesco Caputo** and **Eng. Rosanna Manzo**.
 
-> I metadati bibliografici sono trascritti dai frontespizi dei PDF forniti. Per inserire DOI, permalink di archivio istituzionale o file PDF nel repository è necessario disporre di un URL pubblicabile e dei relativi diritti: **TODO: [Confermare autorizzazione e link alle tesi]**.
+## Chapter-to-code traceability
 
-## Mappa dei capitoli
-
-| Area documentata | Tesi BLE — Bartoli | Tesi Front-End — Contino | Codice di riferimento |
+| Documentation area | BLE thesis — Bartoli | Frontend thesis — Contino | Related source code |
 | --- | --- | --- | --- |
-| Requisiti di funzionamento | Cap. 1, §§1.2.1–1.2.7 | Cap. 1, §§1.2–1.3 | `core/`, `ui/pages/` |
-| Flusso di UX e mockup | §1.3, figura 1.3 | §§2.3.1–2.3.3, figura 2.2 | `ui/widgets/bottom_navigation_bar.dart`; `ui/pages/*` |
-| Struttura modulare | §1.4 (Flutter) | §§2.1–2.4 | `lib/main.dart`, `core/`, `ui/`, `utils/` |
-| Permessi, scan, connessione, pairing | Cap. 2, §§2.1.1–2.1.4 | §3.3.2 | `core/ble_connection.dart`, `ui/pages/blue_connection.dart` |
-| Comandi, parsing, ACK/NACK | Cap. 3, §§3.1–3.3 | §1.2.4 e flussi UI cap. 3 | `core/ble_commandSender.dart`, `core/ble_handler.dart` |
-| Batteria, contatto elettrodi, sweep | Cap. 3, §3.4 | §§1.3.2, 3.3.3 | `ui/pages/battery_confermation_page.dart`, `core/ble_handler.dart` |
-| Simulator e CRC16 | Cap. 4, §§4.1–4.4 | Testing, §3.4 | `ble_simulator.py` allegato separatamente |
-| Diario, notifiche e persistenza | Requisiti paziente §1.2.6 | §§3.2–3.4 | `database_helper.dart`, `notification_service.dart`, pagine paziente |
+| Functional requirements | Ch. 1, §§1.2.1–1.2.7 | Ch. 1, §§1.2–1.3 | `core/`, `ui/pages/` |
+| UX flow and mockups | §1.3, Fig. 1.3 | §§2.3.1–2.3.3, Fig. 2.2 | `ui/widgets/bottom_navigation_bar.dart`; `ui/pages/*` |
+| Module boundaries | §1.4 (Flutter) | §§2.1–2.4 | `lib/main.dart`, `core/`, `ui/`, `utils/` |
+| Permissions, scanning, connection, pairing | Ch. 2, §§2.1.1–2.1.4 | §3.3.2 | `core/ble_connection.dart`, `ui/pages/blue_connection.dart` |
+| Commands, parsing, ACK/NACK | Ch. 3, §§3.1–3.3 | §1.2.4 and UI workflows in Ch. 3 | `core/ble_commandSender.dart`, `core/ble_handler.dart` |
+| Battery, electrode contact, sweep | Ch. 3, §3.4 | §§1.3.2, 3.3.3 | `ui/pages/battery_confermation_page.dart`, `core/ble_handler.dart` |
+| Simulator and CRC16 | Ch. 4, §§4.1–4.4 | Testing, §3.4 | Python BLE test simulator |
+| Administration log, notifications, persistence | Patient requirements, §1.2.6 | §§3.2–3.4 | `database_helper.dart`, `notification_service.dart`, patient screens |
 
-## Metodo di citazione nella documentazione
-
-- **Tesi:** attestano motivazioni, requisiti, mockup e scelte progettuali storiche; non dimostrano automaticamente che il codice presente ora rispetti ogni specifica.
-- **Sorgenti Dart:** attestano classi, funzioni e costanti testualmente presenti nella copia analizzata; non dimostrano da soli runtime, interoperabilità o validazione clinica.
-- **Manifest/pod/Gradle:** attestano dichiarazioni di piattaforma; non bastano a certificare un build su device.
-- **Simulatore Python:** evidenzia una possibile controparte GATT per il testing; è stato fornito come file separato e non va descritto come firmware di produzione.
 

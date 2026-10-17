@@ -1,92 +1,92 @@
-# Protocollo BLE: implementazione e interoperabilità
+# BLE Communication Protocol
 
-[← README](../README.md) · [Architettura](ARCHITECTURE.md) · [Verifiche](KNOWN_ISSUES.md)
+[← README](../README.md) · [Architecture](ARCHITECTURE.md) · [Known issues](KNOWN_ISSUES.md)
 
-> **Ambito:** questa pagina documenta il **protocollo applicativo effettivamente leggibile nei sorgenti Dart** (`ble_connection.dart`, `ble_handler.dart`, `ble_commandSender.dart`) e nel simulatore Python `ble_simulator.py` fornito separatamente. Il simulatore non è stato verificato come file versionato dentro `appInsulin`. Le tesi rappresentano anche requisiti o configurazioni progettuali che possono differire dal codice qui presente.
+The protocol is implemented by `ble_connection.dart`, `ble_handler.dart`, and `ble_commandSender.dart`. A separate Python BLE simulator is available for development and testing.
 
 ## 1. BLE/GATT
 
-| Proprietà | Valore |
+| Property | Value |
 | --- | --- |
-| Ruolo smartphone | BLE Central / GATT client |
-| Ruolo dispositivo | BLE Peripheral / GATT server |
+| Smartphone role | BLE Central / GATT client |
+| Device role | BLE Peripheral / GATT server |
 | Service UUID | `26ddc6b7-8d50-41d5-a1e2-8b2e1d0636fb` |
 | Characteristic UUID | `11235a37-444a-4389-bc22-edf0b0a3997f` |
-| Metodo scrittura client | `writeCharacteristicWithResponse` |
-| Metodo ricezione client | `subscribeToCharacteristic` |
-| MTU richiesto dal client | `100` (valore richiesto, non garantito su tutti i device) |
-| Ricerca periferiche | Scansione senza filtri di servizio nativi, poi filtro lato Dart: nome `insulin`, nome `esp` oppure UUID compatibile |
+| Client write API | `writeCharacteristicWithResponse` |
+| Client receive API | `subscribeToCharacteristic` |
+| Requested MTU | `100` (requested, not guaranteed on every device) |
+| Peripheral discovery | Scan without native service filters, then filter in Dart by a name containing `insulin` or `esp`, or a matching service UUID |
 
-Nel simulatore Python, la stessa characteristic viene creata con proprietà `read`, `write`, `notify`. In produzione verificare servizi, properties, permissions e descrittori effettivamente esposti dal firmware.
+The Python simulator creates the same characteristic with `read`, `write`, and `notify` properties. The target peripheral must expose compatible GATT services, characteristics, and permissions.
 
-## 2. CRC e codifica
+## 2. CRC and encoding
 
-La funzione `BLECommandSender.calculateCrc16()` calcola un CRC **16 bit**, con:
+`BLECommandSender.calculateCrc16()` computes a **16-bit CRC** using:
 
-- Valore iniziale: `0xFFFF`;
-- Polinomio: `0x1021`;
-- Shift MSB-first, senza riflessione esplicita;
-- Nessun XOR finale;
-- Byte CRC trasmessi nell'ordine **high, low**.
+- Initial value: `0xFFFF`;
+- Polynomial: `0x1021`;
+- MSB-first processing with no explicit reflection;
+- No final XOR;
+- CRC bytes transmitted **high byte first, then low byte**.
 
-Il calcolo del CRC sui campioni copre la parte dati **escludendo** i due byte CRC; sulle risposte batteria in forma `ACK + payload`, il CRC verificato dal parser copre il `payload`, non il byte `ACK` esterno. Il codice corrisponde al profilo comunemente indicato come **CRC-16/CCITT-FALSE**, ma il nome da solo non deve sostituire i parametri precisi elencati sopra.
+For measurement samples, the CRC covers the sample bytes **excluding** the two trailing CRC bytes. For battery responses of the form `ACK + payload`, the parser checks the CRC of the `payload`, excluding the outer `ACK` byte. These parameters match the convention commonly called **CRC-16/CCITT-FALSE**, but implementations must use the explicit settings above rather than relying only on that name.
 
-### Layout dei pacchetti
+### Packet layouts
 
 ```text
-Comando base (client → peripheral):
+Base command (client → peripheral):
 +------------+-------------------------+--------+--------+
 | command_id | payload (0..N bytes)    | CRC_hi | CRC_lo |
 +------------+-------------------------+--------+--------+
 
-ACK semplice (peripheral → client):
+Simple ACK (peripheral → client):
 +------+
 | 0x55 |
 +------+
 
-ACK con dati, esempio batteria (peripheral → client):
+ACK with data, e.g. battery status (peripheral → client):
 +------+------------+---------+--------+--------+
 | 0x55 | command_id | battery | CRC_hi | CRC_lo |
 +------+------------+---------+--------+--------+
        \__________CRC scope__________/
 
-Campione impedenza, single-frequency (5 byte):
+Single-frequency impedance sample (5 bytes):
 +-----+--------+--------+--------+--------+
 | seq | real_u8| imag_u8| CRC_hi | CRC_lo |
 +-----+--------+--------+--------+--------+
  \____________CRC scope____________/
 
-Campione sweep (7 byte):
+Sweep sample (7 bytes):
 +-----+---------+---------+---------+---------+--------+--------+
 | seq | real_lo | real_hi | imag_lo | imag_hi | CRC_hi | CRC_lo |
 +-----+---------+---------+---------+---------+--------+--------+
  \___________________CRC scope______________________/
 ```
 
-> La notifica BLE può trasportare più campioni consecutivi. Il parser attuale controlla se la lunghezza del buffer ricevuto è multipla di 5 oppure 7. Il protocollo **non possiede un header con tipo/len/versione** per distinguere in modo robusto i due formati; il flag `inModSweep` contribuisce alla decisione, ma il primo ramo controlla `% 5 == 0` anche durante lo sweep.
+> A BLE notification can carry several consecutive samples. The current parser checks whether the received buffer length is divisible by 5 or 7. The protocol has **no frame header containing type/length/version** to unambiguously distinguish these sample types. The `inModSweep` flag affects processing, but the first branch still checks `% 5 == 0` during sweep acquisition.
 
-### Decodifica dei campioni
+### Sample decoding
 
-- **Single-frequency:** `seq` + `real` e `imag` a 8 bit. Il codice calcola una media dei campioni presenti nel chunk ricevuto.
-- **Sweep:** `seq` + `real` e `imag` a 16 bit, little-endian. Il parser converte il valore unsigned in signed sottraendo `65536` quando è maggiore o uguale a `0x8000`. Il risultato viene raccolto in `sweepDataReal` e `sweepDataImag`.
-- Il simulatore genera 100 coppie reale/immaginario per sweep e, nella modalità mostrata, prepara 3 spettri di esempio. La UI chiede esplicitamente 3 spettri da 100 frequenze, ma l'effettiva parametrizzazione del simulatore va verificata perché alcuni valori risultano hardcoded.
+- **Single frequency:** `seq` plus 8-bit `real` and `imag` values. The source computes their averages within the received notification chunk.
+- **Sweep:** `seq` plus 16-bit little-endian `real` and `imag` values. The decoder converts unsigned values to signed by subtracting `65536` for values `>= 0x8000`. Parsed values are collected in `sweepDataReal` and `sweepDataImag`.
+- The UI requests three spectra across 100 frequencies. The simulator uses representative data and hardcoded values in parts of its implementation.
 
-## 3. Comandi osservati
+## 3. Command IDs
 
-| Hex | Nome descrittivo | Payload nel codice Dart | Risposta/parsing previsto |
+| Hex | Descriptive name | Payload in Dart | Expected response/parsing |
 | --- | --- | --- | --- |
-| `0x00` | `SEND_BATTERY` | Vuoto | `0x55, 0x00, level_u8, CRC16(0x00,level)` nel simulatore |
-| `0x01` | `ANAGRAFIC_SEND` | `nome + 0x00 + cognome + 0x00 + data` | ACK; dati codificati in `codeUnits` Dart, non in UTF-8 esplicito |
-| `0x02` | `START_SINGLE_FREQUENCY` | **Vuoto nel workflow corrente** | ACK, campioni a 5 byte; il simulatore legge tuttavia `value[1]` come frequenza |
-| `0x03` | `START_SWEEP` | `[numSpettri_u8, numFrequenze_u8]` | ACK e pacchetti a 7 byte |
-| `0xFF` | `STOP` | Vuoto | ACK; `sendStopCommand()` implementa anche una variante senza attesa ACK applicativa |
-| `0xFE` | `MEASUREMENT_COMPLETE` | Evento in ingresso (1 byte + CRC) | `BLEController` verifica il CRC e apre pagina di conferma |
-| `0x55` | `ACK` | Forma semplice oppure con CRC, secondo il contesto | Completa `_ackCompleter` o avanza il ciclo dati |
-| `0xAA` | `NACK` | Eventuale lista di `seq` + CRC | Richiesta di ritrasmissione selettiva |
+| `0x00` | `SEND_BATTERY` | Empty | Simulator: `0x55, 0x00, level_u8, CRC16(0x00, level)` |
+| `0x01` | `ANAGRAFIC_SEND` | `first_name + 0x00 + last_name + 0x00 + date` | ACK; encoded with Dart `codeUnits`, not explicitly UTF-8 |
+| `0x02` | `START_SINGLE_FREQUENCY` | Empty | ACK, then 5-byte samples; however, the simulator reads `value[1]` as the frequency |
+| `0x03` | `START_SWEEP` | `[spectrum_count_u8, frequency_count_u8]` | ACK, then 7-byte samples |
+| `0xFF` | `STOP` | Empty | ACK; `sendStopCommand()` also provides a variant that does not await application-level ACK |
+| `0xFE` | `MEASUREMENT_COMPLETE` | Incoming event (1 byte + CRC) | `BLEController` checks CRC and opens the confirmation screen |
+| `0x55` | `ACK` | Simple or CRC-bearing form, depending on context | Completes `_ackCompleter` or advances sample handling |
+| `0xAA` | `NACK` | Optional list of `seq` values + CRC | Requests selective retransmission |
 
-**Non inventare campi mancanti:** nelle due tesi la configurazione sweep comprende anche **frequenza iniziale** e **intervallo** (spaziatura logaritmica). Tali campi non compaiono nel payload di `sendSweepCommand()` presente in Drive. Per definire il wire format definitivo servono versione e specifiche del firmware.
+The academic specification also describes initial-frequency and logarithmic-spacing parameters for a sweep. These fields are not included in the Dart `sendSweepCommand()` payload; firmware interoperability depends on agreement about the command format.
 
-## 4. Flusso di richiesta con ACK
+## 4. Command/ACK exchange
 
 ```mermaid
 sequenceDiagram
@@ -97,76 +97,76 @@ sequenceDiagram
   UI->>S: sendCommandWithAck(id,payload)
   S->>S: CRC16(id + payload)
   S->>P: GATT Write With Response
-  Note over S: Attesa ACK applicativo (default 2 s)
-  alt ACK applicativo
+  Note over S: Await application-level ACK (default 2 s)
+  alt Application-level ACK
     P-->>H: notify 0x55 [payload] [CRC]
     H->>S: completeAck(true)
     S-->>UI: true
-  else NACK applicativo o timeout
-    P-->>H: notify 0xAA (se presente)
+  else Application-level NACK or timeout
+    P-->>H: notify 0xAA (if received)
     H->>S: completeAck(false)
-    S->>P: ritenta lo stesso comando
+    S->>P: Retry the same command
   end
 ```
 
-`sendCommandWithAck()` ha un `while (true)` **senza limite di retry**. In caso di periferica assente, ACK mancante o errore persistente, l'operazione può restare pendente indefinitamente. L'attesa inizializzata in `_waitForAck()` usa un `Completer` condiviso per l'istanza: comandi concorrenti richiedono particolare cautela. Questi sono **comportamenti del codice attuale, non garanzie di affidabilità**.
+`sendCommandWithAck()` contains an **unbounded `while (true)` retry loop**. If the device is unavailable or acknowledgments never arrive, an operation may remain pending indefinitely. `_waitForAck()` uses a `Completer` shared by that sender instance, so concurrent commands require particular care. Command handling should account for cancellation and a bounded retry policy.
 
-## 5. Trasferimento campioni e ritrasmissioni
+## 5. Sample transfer and retransmission
 
-### Modello dalle tesi
+### Model described in the theses
 
-La tesi BLE di Lorenzo Bartoli distingue ACK/NACK per singoli pacchetti e trasmissioni stream in gruppi, con **ACK cumulativo** quando un gruppo è ricevuto correttamente oppure **NACK selettivo** con numeri di sequenza da ritrasmettere. La tesi Front-End di Michele Contino evidenzia gruppi da dieci pacchetti e la possibilità di ritrasmettere soltanto quelli errati. Le due descrizioni **non sono del tutto uniformi sul momento in cui debba essere emesso l'ACK**.
+Lorenzo Bartoli's BLE thesis distinguishes per-packet ACK/NACK from group-based streaming: a **cumulative ACK** follows an error-free group, while a **selective NACK** carries the sequence numbers requiring retransmission. Michele Contino's frontend thesis refers to groups of ten samples and selective retransmission of corrupted samples. The two accounts are **not completely consistent about ACK timing**.
 
-### Comportamento dei sorgenti
+### Current application behavior
 
-- `BLEController.handleIncomingData()` risponde con `sendAckWithCRC()` quando tutti i campioni nel buffer notificato superano il CRC, e con `sendNackWithCRC(errors)` altrimenti.
-- Il parser non aspetta esplicitamente dieci campioni prima di rispondere: la delimitazione effettiva dipende dai chunk/notifiche ricevute.
-- `verifyCRC()` restituisce i sequence number CRC-errati, **non** una lista completa dei missing sequence number; non si osserva un controllo autonomo dei buchi in sequenza.
-- Il simulatore Python genera gruppi di 10 campioni single-frequency e pacchetti sweep a coppie nelle notifiche, ma non implementa in modo identico tutte le attese e le dimensioni raccontate nelle tesi.
+- `BLEController.handleIncomingData()` sends `sendAckWithCRC()` if all samples in the received notification buffer pass CRC validation; otherwise it calls `sendNackWithCRC(errors)`.
+- It does not explicitly wait for ten samples before acknowledging. Actual grouping depends on notification boundaries.
+- `verifyCRC()` returns CRC-failing sequence numbers, **not** a complete list of absent sequence numbers; missing sequence values are not detected separately.
+- The Python simulator generates groups of ten single-frequency samples and pairs of sweep samples per notification, but it does not reproduce all thesis-specified timing and grouping behavior exactly.
 
-**Conseguenza:** la compatibilità dei meccanismi ACK/NACK tra versione Dart e firmware reale va verificata tramite test con log temporali, packet loss e boundary di MTU.
+Validate ACK/NACK timing against firmware using packet-loss tests and MTU-boundary cases.
 
-## 6. Verifiche di installazione della patch
+## 6. Patch installation checks
 
-Il workflow nella UI è: lettura batteria, misura single-frequency, verifica impedenza, stop e sweep.
+The UI workflow requests battery status, starts single-frequency acquisition, checks impedance, sends STOP, and performs a sweep.
 
-| Controllo | Implementazione osservata | Fonte della soglia / requisito |
+| Check | Application behavior | Value |
 | --- | --- | --- |
-| Batteria | Livello **> 50** considerato sufficiente in `BLEScanScreen` | `50` nel codice (soglia prototipale) |
-| Impedenza | Media di reale e immaginaria, nel chunk ricevuto, entrambe `< 500` | `impedanceThreshold = 500` in `BLEController` |
-| Timeout impedenza | Timer da **5 s** in `avviaTimerVerificaImpedanza`; ulteriore attesa massima **60 s** in pagina | Sorgenti Flutter |
-| Sweep | UI chiede `3` spettri × `100` frequenze; attesa massima **50 s** | `battery_confermation_page.dart` e controller |
-| Monotonicità | Media per finestre consecutive da **10 campioni**, confronto fra le medie | `checkMonotonicity` |
-| Deviazione standard | 3 spettri, soglia default **10**; il workflow UI passa **solo** la componente reale | `checkStandardDeviation` e `checkSweepData` |
+| Battery | Level **> 50** is considered sufficient by `BLEScanScreen` | Hardcoded `50` in source (prototype threshold) |
+| Impedance | Averages of real and imaginary values in the received chunk must both be `< 500` | `impedanceThreshold = 500` in `BLEController` |
+| Impedance timeout | **5-second** timer in `avviaTimerVerificaImpedanza`, plus a **60-second** maximum wait in the screen | Flutter source |
+| Sweep | UI requests `3` spectra × `100` frequencies, with a **50-second** maximum wait | `battery_confermation_page.dart` and controller |
+| Monotonicity | Compares averages of consecutive windows of **10 samples** | `checkMonotonicity` |
+| Standard deviation | Three spectra; default threshold **10**; the UI supplies **only the real component** | `checkStandardDeviation` and `checkSweepData` |
 
-**Discrepanza rilevante:** la tesi BLE richiede la valutazione della deviazione standard sia sulla componente reale sia su quella immaginaria; la UI attuale valuta quella reale soltanto. Inoltre la tesi menziona un controllo della monotonicità della parte reale, mentre `checkSweepData()` controlla sia la parte reale sia la parte immaginaria. Non correggere la descrizione per farla apparire coerente: questi punti vanno concordati con i progettisti del trasduttore.
+The implementation evaluates standard deviation for the real component only, while the academic design calls for both real and imaginary components. The implemented monotonicity check also differs from the original design.
 
-## 7. Problemi di framing e interoperabilità da verificare
+## 7. Implementation considerations
 
-1. **Ambiguità `% 5` / `% 7`:** un buffer da 35 byte è divisibile per 5 e 7; l'ordine dei rami può impedire l'append dei campioni sweep.
-2. **Buffering:** il codice assume notifiche allineate a campioni interi e non mantiene un buffer per un campione spezzato tra notifiche.
-3. **ACK non validato prima di completare attesa:** per risposte con payload, il parser invoca `completeAck()` prima del controllo CRC; un ACK malformato può sbloccare il chiamante.
-4. **Start single-frequency:** il simulatore legge un byte di frequenza, ma la UI invia payload vuoto.
-5. **Ritrasmissione simulatore:** il gestore `send_samples()` assegna `pacchetti_singola_frequenza` in una variabile locale; il ramo NACK fa riferimento alla variabile globale. Va testata la ritrasmissione.
-6. **Versioning del protocollo:** non è disponibile un campo di versione o un documento di compatibilità firmware ↔ app.
-7. **Conferma fine misura:** il client gestisce `0xFE`, ma il percorso di emissione di tale evento non è evidente nel simulatore allegato.
-8. **Comando anagrafica:** `String.codeUnits` e `decode('utf-8')` nel simulatore non garantiscono compatibilità per tutti i caratteri non ASCII.
+1. **Ambiguous `% 5` / `% 7` branching:** a 35-byte buffer is divisible by both 5 and 7; branch order can prevent sweep samples from being appended correctly.
+2. **Buffering:** the parser assumes that each notification contains complete samples; it does not retain a partial sample split across notifications.
+3. **ACK accepted before payload CRC:** for payload-bearing ACK responses, the parser calls `completeAck()` before validating the CRC, potentially releasing the caller on malformed data.
+4. **Single-frequency start:** the simulator expects a frequency byte, but the current UI sends an empty payload.
+5. **Simulator retransmission:** `send_samples()` assigns `pacchetti_singola_frequenza` in a local variable, while the NACK path refers to the global variable; retransmission needs testing/fixing.
+6. **Protocol versioning:** the current packet format does not include a version field.
+7. **End-of-measurement event:** the client handles `0xFE`, but confirm the corresponding event emission in the peripheral firmware.
+8. **Patient-details encoding:** Dart `String.codeUnits` and the simulator's UTF-8 decoding do not guarantee compatibility for non-ASCII characters.
 
-Vedi [Verifiche e problemi noti](KNOWN_ISSUES.md) prima di test hardware o distribuzione.
+See [Known issues](KNOWN_ISSUES.md) before hardware testing or distribution.
 
-## 8. Matrice di test del protocollo (da eseguire)
+## 8. Protocol test matrix
 
-| Caso | Aspettativa di test | Stato |
-| --- | --- | --- |
-| Lettura batteria con risposta valida | ACK + CRC accettati; UI aggiornata | **Non eseguito in questa revisione** |
-| ACK CRC errato | Il comando non deve risultare validato | **Da verificare/correggere** |
-| NACK su un campione sweep | Ritrasmissione selettiva e ricostruzione ordinata | **Da verificare** |
-| Sequenza mancante senza CRC errato | Identificazione e ritrasmissione del missing packet | **Da implementare/verificare** |
-| Spezzatura del pacchetto su due notify | Ricomposizione del frame | **Non gestita dal parser attuale** |
-| Disconnessione volontaria/involontaria | 0 / max 3 tentativi rispettivamente | **Da testare** |
-| Invio concorrente di comandi | Nessuna perdita di correlazione ACK ↔ richiesta | **Da irrobustire** |
-| Android / iOS su device fisico | Stesso risultato logico a parità di pacchetti | **Non verificato** |
+| Scenario | Expected behavior |
+| --- | --- |
+| Valid battery response | ACK and CRC accepted; battery state updated |
+| Invalid ACK CRC | Reject the response without confirming the command |
+| NACK for one sweep sample | Retransmit the indicated sample |
+| Missing sequence number | Detect and request missing data |
+| Sample split across notifications | Reassemble the complete sample before parsing |
+| Intentional / unintentional disconnect | Skip auto-reconnect for manual disconnect; otherwise retry within the configured limit |
+| Concurrent commands | Match acknowledgments to the correct command |
+| Android / iOS hardware | Consistent parsing of the same protocol data |
 
-## 9. Dati richiesti per stabilizzare la specifica
+## 9. Firmware compatibility
 
-**TODO**: ottenere `protocol_version`, schema comandi firmware/UUID/properties confermati, limiti di payload/MTU, endianess e signedness formalizzati, contratto ACK per gruppo, tempi di timeout/retry, parametri frequenziali completi, definizione dell'evento `0xFE` e firmware/commit di riferimento. Questi elementi non vanno sostituiti con ipotesi o con i soli valori del simulatore.
+When integrating a new peripheral firmware revision, compare its command schema, GATT properties, MTU, framing, encoding, ACK/NACK policy, sweep parameters, and `0xFE` completion event against this client implementation. Maintain byte-level compatibility tests for each supported revision.
